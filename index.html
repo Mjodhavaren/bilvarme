@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Bilvärme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: en smal fjärrkontroll. Statusurtavla överst, sedan en rullande 7-dagarskalender, kommande, historik och inställningar. */
+:root {
+  --bg: #eaeff3;
+  --surface: #ffffff;
+  --surface-2: #f3f6f8;
+  --line: #d3dce3;
+  --grid: #e6ecf0;
+  --fg: #142029;
+  --muted: #5b6b78;
+  --frost: #8fb3cc;
+  --heat: #d9661f;
+  --heat-soft: #fbe6d6;
+  --manual: #3462c4;
+  --manual-soft: #dde6f8;
+  --today: #f6f9fb;
+  --past: rgba(20, 32, 41, 0.045);
+  --ok: #2f7d55;
+  --ok-soft: #dcefe4;
+  --warn: #9a6a00;
+  --warn-soft: #f8ecc8;
+  --bad: #b3372d;
+  --bad-soft: #f7dcd8;
+  --on-heat: #ffffff;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1419; --surface: #151f27; --surface-2: #1b2731; --line: #2a3a46; --grid: #1f2c36;
+    --fg: #e4ecf1; --muted: #90a2b0; --frost: #5f8aa8; --heat: #ff9447; --heat-soft: #3a2517;
+    --manual: #7fa4ff; --manual-soft: #1c2a4a; --today: #18242d; --past: rgba(0, 0, 0, 0.22);
+    --ok: #6fcf98; --ok-soft: #173326; --warn: #e8bf55; --warn-soft: #362c12; --bad: #ff8a7d; --bad-soft: #3c1c19;
+    --on-heat: #1a0f07; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1419; --surface: #151f27; --surface-2: #1b2731; --line: #2a3a46; --grid: #1f2c36;
+  --fg: #e4ecf1; --muted: #90a2b0; --frost: #5f8aa8; --heat: #ff9447; --heat-soft: #3a2517;
+  --manual: #7fa4ff; --manual-soft: #1c2a4a; --today: #18242d; --past: rgba(0, 0, 0, 0.22);
+  --ok: #6fcf98; --ok-soft: #173326; --warn: #e8bf55; --warn-soft: #362c12; --bad: #ff8a7d; --bad-soft: #3c1c19;
+  --on-heat: #1a0f07; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.75rem; letter-spacing: -0.02em; margin: 0; }
+h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); font-weight: 600; margin: 0; }
+.sub { color: var(--muted); font-size: 0.85rem; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Statusurtavla */
+.dial { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px 20px 20px; display: grid; gap: 18px; }
+.dial-top { display: grid; grid-template-columns: 148px 1fr; gap: 20px; align-items: center; }
+.ring { position: relative; width: 148px; height: 148px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .track { stroke: var(--surface-2); }
+.ring .bar { stroke: var(--frost); transition: stroke-dashoffset 0.6s ease, stroke 0.3s; }
+.dial.on .ring .bar { stroke: var(--heat); }
+.dial.on.manual .ring .bar { stroke: var(--manual); }
+.ring-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring-label .big { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+.ring-label .small { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+.state { display: grid; gap: 6px; min-width: 0; }
+.state .word { font-family: var(--display); font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; }
+.dial.on .state .word { color: var(--heat); }
+.dial.on.manual .state .word { color: var(--manual); }
+.state .detail { color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.meter { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); }
+.meter b { color: var(--fg); font-weight: 500; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button {
+  font: inherit; cursor: pointer; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
+  color: var(--fg); padding: 12px 16px; font-weight: 600;
+}
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .col:focus-visible, .ev:focus-visible { outline: 2px solid var(--heat); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: default; }
+.primary { background: var(--heat); border-color: var(--heat); color: var(--on-heat); flex: 1; font-size: 1.05rem; padding: 15px 16px; }
+.manual-btn { background: var(--manual); border-color: var(--manual); color: var(--on-heat); }
+.danger { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.ghost { background: transparent; }
+.small-btn { padding: 8px 12px; font-size: 0.9rem; border-radius: 10px; }
+.actions .stop { flex: 0 0 auto; min-width: 110px; }
+
+.confirm { border: 1px solid var(--manual); background: var(--manual-soft); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.confirm p { margin: 0; }
+.confirm .actions button { flex: 1; }
+
+.toast { border-radius: 12px; padding: 10px 14px; font-size: 0.92rem; background: var(--surface); border: 1px solid var(--line); }
+.toast.bad { background: var(--bad-soft); border-color: var(--bad); }
+.toast.ok { background: var(--ok-soft); border-color: var(--ok); }
+
+/* Veckokalender */
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.cal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.cal-scroll { max-height: 440px; overflow-y: auto; overscroll-behavior: contain; }
+.cal-grid { display: grid; grid-template-columns: 34px repeat(7, minmax(0, 1fr)); }
+.dayhead {
+  position: sticky; top: 0; z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line);
+  text-align: center; padding: 8px 2px 6px; font-size: 0.72rem; line-height: 1.2; color: var(--muted);
+}
+.dayhead b { display: block; color: var(--fg); font-size: 0.95rem; font-weight: 600; font-family: var(--mono); }
+.dayhead.today { color: var(--heat); }
+.dayhead.today b { color: var(--heat); }
+.corner { position: sticky; top: 0; z-index: 3; background: var(--surface); border-bottom: 1px solid var(--line); }
+.axis { position: relative; }
+.axis span { position: absolute; right: 4px; font-family: var(--mono); font-size: 0.62rem; color: var(--muted); transform: translateY(-50%); }
+.col {
+  position: relative; border-left: 1px solid var(--grid); cursor: copy;
+  background-image: linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 100% var(--h);
+}
+.col.today { background-color: var(--today); }
+.col .past { position: absolute; left: 0; right: 0; top: 0; background: var(--past); pointer-events: none; }
+.col .nowline { position: absolute; left: -1px; right: 0; height: 2px; background: var(--heat); z-index: 2; pointer-events: none; }
+.col .nowline::before { content: ""; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--heat); }
+.ev {
+  position: absolute; left: 2px; right: 2px; border-radius: 6px; padding: 2px 3px; overflow: hidden; cursor: pointer;
+  font-family: var(--mono); font-size: 0.62rem; line-height: 1.15; z-index: 1; border: 1px solid transparent;
+}
+.ev.v { background: var(--heat); color: var(--on-heat); }
+.ev.v.done, .ev.v.stopped { background: var(--heat-soft); color: var(--heat); border-color: var(--heat); }
+.ev.v.no_load { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.ev.v.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--heat); }
+.ev.m { background: var(--manual); color: var(--on-heat); }
+.ev.m.done, .ev.m.stopped, .ev.m.no_load { background: var(--manual-soft); color: var(--manual); border-color: var(--manual); }
+.ev.m.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--manual); }
+.ev.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); padding: 10px 12px; border-top: 1px solid var(--line); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 12px; }
+.panel.v { border-color: var(--heat); }
+.panel.m { border-color: var(--manual); }
+.panel h3 { margin: 0; font-family: var(--display); font-size: 1.2rem; font-weight: 700; }
+.panel p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.fields { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+label { display: grid; gap: 4px; font-size: 0.85rem; font-weight: 500; min-width: 0; }
+label small { color: var(--muted); font-weight: 400; }
+input, select { font: inherit; padding: 10px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); width: 100%; min-width: 0; }
+.hint { font-size: 0.85rem; color: var(--muted); }
+.hint.bad { color: var(--bad); }
+
+section { display: grid; gap: 8px; }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 84px 1fr auto; gap: 12px; padding: 12px 14px; align-items: center; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+button.row { width: 100%; text-align: left; border-radius: 0; border: 0; border-top: 1px solid var(--line); background: transparent; font-weight: 400; }
+button.row:first-child { border-top: 0; }
+.row .when { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.row .when b { color: var(--fg); font-weight: 500; display: block; font-size: 0.95rem; }
+.row .what { min-width: 0; }
+.row .what div { overflow-wrap: anywhere; }
+.row .what small { color: var(--muted); display: block; }
+.empty { padding: 16px 14px; color: var(--muted); font-size: 0.92rem; }
+.pill { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+.pill.heat { background: var(--heat-soft); color: var(--heat); }
+.pill.man { background: var(--manual-soft); color: var(--manual); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+summary { padding: 14px; cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--muted); font-family: var(--mono); }
+details[open] summary::after { content: "–"; }
+form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
+
+@media (max-width: 440px) {
+  .dial-top { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .meter { justify-content: center; }
+  .cal-grid { grid-template-columns: 28px repeat(7, minmax(0, 1fr)); }
+  .dayhead { font-size: 0.64rem; }
+  .ev { font-size: 0.56rem; padding: 2px 2px; }
+  .fields { grid-template-columns: 1fr 1fr; }
+  .fields label:first-child { grid-column: 1 / -1; }
+  .row { grid-template-columns: 70px 1fr; }
+  .row .pill { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } }
+.login { max-width: 360px; margin: 12vh auto 0; }
+header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.gear { display: inline-flex; align-items: center; padding: 8px 10px; }
+</style>
+</head>
+<body>
+
+<form class="panel login" id="loginForm" hidden>
+  <h1>Bilvärme</h1>
+  <label for="lUser">Användarnamn<input id="lUser" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+  <label for="lPass">Lösenord<input id="lPass" type="password" autocomplete="current-password" required></label>
+  <div class="hint bad" id="lHint" hidden></div>
+  <div class="actions"><button class="primary" type="submit" id="lBtn">Logga in</button></div>
+</form>
+
+<div class="wrap" id="app" hidden>
+  <header>
+    <h1>Bilvärme</h1>
+    <div class="who">
+      <span class="sub" id="hdr">Nissan Leaf · kupévärmare 1400 W</span>
+      <button type="button" class="small-btn ghost gear" id="gearBtn" aria-label="Inställningar" title="Inställningar"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button type="button" class="small-btn ghost" id="logoutBtn">Logga ut</button>
+    </div>
+  </header>
+
+  <div class="dial" id="dial">
+    <div class="dial-top">
+      <div class="ring" aria-hidden="true">
+        <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="10"/><circle class="bar" id="bar" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+        <div class="ring-label"><div class="big" id="ringBig">–</div><div class="small" id="ringSmall">min kvar</div></div>
+      </div>
+      <div class="state">
+        <div class="word" id="word">Ansluter…</div>
+        <div class="detail" id="detail">Hämtar status från uttaget.</div>
+        <div class="meter" id="meter"></div>
+      </div>
+    </div>
+    <div id="confirm" class="confirm" hidden>
+      <p id="confirmText"></p>
+      <div class="actions">
+        <button class="manual-btn" id="confirmYes" type="button">Förläng</button>
+        <button class="ghost" id="confirmNo" type="button">Avbryt</button>
+      </div>
+    </div>
+    <div class="actions" id="mainActions">
+      <button class="primary manual-btn" id="startBtn" type="button" disabled>Starta 60 min</button>
+      <button class="stop" id="stopBtn" type="button" hidden>Stoppa</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <section>
+    <div class="cal-head">
+      <h2>7 dagar framåt</h2>
+      <button type="button" class="small-btn" id="addBtn">+ Lägg till Värme</button>
+    </div>
+
+    <form class="panel v" id="addForm" hidden>
+      <h3>Ny Värme</h3>
+      <div class="fields">
+        <label for="fDay">Dag<select id="fDay"></select></label>
+        <label for="fStart">Start<input id="fStart" type="time" step="300" required></label>
+        <label for="fEnd">Slut<input id="fEnd" type="time" step="300" required></label>
+      </div>
+      <div class="hint" id="fHint"></div>
+      <div class="actions">
+        <button class="primary" type="submit" id="fSave">Spara Värme</button>
+        <button class="ghost" type="button" id="fCancel">Avbryt</button>
+      </div>
+    </form>
+
+    <div class="panel" id="detailPanel" hidden>
+      <h3 id="dTitle"></h3>
+      <p id="dText"></p>
+      <div class="actions" id="dActions"></div>
+    </div>
+
+    <div class="cal">
+      <div class="cal-scroll" id="calScroll">
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="legend">
+        <span><i style="background: var(--heat)"></i>Värme</span>
+        <span><i style="background: var(--manual)"></i>Manuell start</span>
+        <span><i style="background: var(--heat-soft); border: 1px solid var(--heat)"></i>Klar</span>
+        <span>Tryck i kalendern för att lägga till</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kommande</h2>
+    <div class="list" id="upcoming"><div class="empty">Hämtar…</div></div>
+  </section>
+
+  <details id="settingsBox">
+    <summary>Inställningar</summary>
+    <form class="settings" id="settingsForm">
+      <label for="manual_minutes">Starta-knappen värmer i (minuter) <small>Längden på en manuellt startad värme. 1–120 minuter.</small>
+        <input id="manual_minutes" name="manual_minutes" type="number" min="1" max="120" step="1" value="60" required>
+      </label>
+      <label for="shelly_host">Shelly-server <small>Shelly-appen → Inställningar → Användarinställningar → Autentiseringsmoln-nyckel</small>
+        <input id="shelly_host" name="shelly_host" type="text" placeholder="shelly-123-eu.shelly.cloud" autocomplete="off">
+      </label>
+      <label for="shelly_device_id">Enhets-id <small>Enheten → Inställningar → Enhetsinformation</small>
+        <input id="shelly_device_id" name="shelly_device_id" type="text" placeholder="t.ex. e4b063f1a2b4" autocomplete="off">
+      </label>
+      <label for="shelly_auth_key">Nyckel <small id="keyState">Ingen nyckel sparad.</small>
+        <input id="shelly_auth_key" name="shelly_auth_key" type="password" placeholder="Klistra in nyckeln" autocomplete="off">
+      </label>
+      <label for="power_threshold_w">Sladd ur när effekten är under (W) <small>Under detta i en minut räknas som urkopplad värmare.</small>
+        <input id="power_threshold_w" name="power_threshold_w" type="number" min="1" max="500" step="1" value="10">
+      </label>
+      <div class="actions"><button class="primary" type="submit" id="saveBtn">Spara</button></div>
+    </form>
+  </details>
+</div>
+
+<script>
+(() => {
+  const API = "https://bshqbrpzgewxanvqhgtc.supabase.co";
+  const API_KEY = "sb_publishable_9Y3BmHtuFvnFtFizyV6Ipg_EeZWBcgA"; // publik nyckel, ger ingen åtkomst utan inloggning
+  const DOMAIN = "@bilvarme.local"; // användarnamn blir <namn>@bilvarme.local i Supabase Auth
+  const STORE = "bilvarme.session";
+  const TZ = "Europe/Stockholm";
+  const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "settings"]);
+  const H = 24; // pixlar per timme i kalendern
+  const MIN = 60000;
+  const $ = (id) => document.getElementById(id);
+  const tf = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const tfs = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const wdShort = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, weekday: "short" });
+  const dfLong = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" });
+  const partsF = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const t = (v) => tf.format(new Date(v));
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function parts(ms) {
+    const p = Object.fromEntries(partsF.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute, s: +p.second };
+  }
+  // Svensk väggklocktid till UTC-millisekunder.
+  function wall(y, mo, d, h, mi) {
+    const guess = Date.UTC(y, mo - 1, d, h, mi);
+    const off = (ms) => { const p = parts(ms); return Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s) - ms; };
+    return guess - off(guess - off(guess));
+  }
+  function days() {
+    const base = parts(S ? new Date(S.week.from).getTime() + 3 * 3600000 : Date.now());
+    const out = [];
+    for (let i = 0; i < 7; i++) {
+      const start = wall(base.y, base.mo, base.d + i, 0, 0);
+      const end = wall(base.y, base.mo, base.d + i + 1, 0, 0);
+      const p = parts(start);
+      out.push({ i, start, end, y: p.y, mo: p.mo, d: p.d });
+    }
+    return out;
+  }
+  function dayLabel(dy) {
+    if (dy.i === 0) return "Idag";
+    if (dy.i === 1) return "Imorgon";
+    const w = wdShort.format(new Date(dy.start + 3600000)).replace(".", "");
+    return w.charAt(0).toUpperCase() + w.slice(1) + " " + dy.d + "/" + dy.mo;
+  }
+  function dayOf(ms) {
+    const ds = days();
+    const hit = ds.find((dy) => ms >= dy.start && ms < dy.end);
+    if (!hit) return dfLong.format(new Date(ms));
+    return hit.i < 2 ? dayLabel(hit) : dfLong.format(new Date(ms)).replace(/^\w/, (c) => c.toUpperCase());
+  }
+  const dur = (ms) => { const m = Math.round(ms / MIN); return (m >= 60 ? Math.floor(m / 60) + " h " : "") + (m % 60 ? (m % 60) + " min" : (m >= 60 ? "" : "0 min")); };
+
+  let session = null; // { access_token, refresh_token, expires_at }
+  let S = null;
+  let busy = false;
+  let selected = null; // { type: "v"|"m", id }
+  let didScroll = false;
+
+  function toast(msg, kind) {
+    const el = $("toast");
+    if (!msg) { el.hidden = true; return; }
+    el.textContent = msg;
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.hidden = false;
+    clearTimeout(toast._t);
+    if (kind !== "bad") toast._t = setTimeout(() => (el.hidden = true), 5000);
+  }
+
+  /* Inloggning (Supabase Auth) */
+  const authError = () => Object.assign(new Error("Logga in igen"), { code: "auth" });
+  function loadSession() { try { return JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { return null; } }
+  function saveSession(s) {
+    session = s;
+    try { if (s) localStorage.setItem(STORE, JSON.stringify(s)); else localStorage.removeItem(STORE); } catch (e) { /* ingen lagring: gäller tills sidan stängs */ }
+  }
+  async function authPost(grant, body) {
+    const res = await fetch(API + "/auth/v1/token?grant_type=" + grant, {
+      method: "POST", headers: { apikey: API_KEY, "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.access_token) throw Object.assign(new Error(j.error_description || j.msg || "Servern svarade " + res.status), { status: res.status });
+    return { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: Date.now() + (j.expires_in || 3600) * 1000 };
+  }
+  let refreshing = null;
+  function renew() {
+    if (!session) return Promise.reject(authError());
+    if (!refreshing) refreshing = authPost("refresh_token", { refresh_token: session.refresh_token }).then(saveSession).finally(() => (refreshing = null));
+    return refreshing;
+  }
+  async function token() {
+    if (!session) throw authError();
+    if (session.expires_at - Date.now() < 60000) {
+      try { await renew(); } catch (e) {
+        if (e.status >= 400 && e.status < 500) { signOut("Du har loggats ut. Logga in igen."); throw authError(); }
+        throw e;
+      }
+    }
+    return session.access_token;
+  }
+  function showApp(on) { $("app").hidden = !on; $("loginForm").hidden = on; }
+  function signOut(msg) {
+    const old = session;
+    saveSession(null);
+    S = null;
+    formFilled = false;
+    toast("");
+    $("lHint").textContent = msg || "";
+    $("lHint").hidden = !msg;
+    showApp(false);
+    if (old) fetch(API + "/auth/v1/logout", { method: "POST", headers: { apikey: API_KEY, Authorization: "Bearer " + old.access_token } }).catch(() => {});
+  }
+
+  function errorText(e) {
+    if (e instanceof TypeError) return "Ingen kontakt med servern. Kontrollera nätet.";
+    return "Kunde inte nå servern: " + ((e && e.message) || "okänt fel");
+  }
+
+  async function call(action, args) {
+    if (!ACTIONS.has(action)) throw new Error("okänd åtgärd");
+    const send = async () => fetch(API + "/functions/v1/bilvarme", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + (await token()), apikey: API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ action }, args || {})),
+    });
+    let res = await send();
+    if (res.status === 401) { // token kan ha dragits in: förnya en gång
+      try { await renew(); res = await send(); } catch (e) { /* hanteras nedan */ }
+      if (res.status === 401) { signOut("Kontot har inte åtkomst, eller så har inloggningen gått ut."); throw authError(); }
+    }
+    if (!res.ok) throw new Error("servern svarade " + res.status);
+    const out = await res.json();
+    if (out.state) { S = out.state; render(); }
+    return out.result;
+  }
+
+  async function refresh() {
+    if (!session || busy) return;
+    try {
+      await call("state");
+    } catch (e) {
+      if (!e || e.code !== "auth") toast(errorText(e), "bad");
+    }
+  }
+
+  async function act(action, args) {
+    if (!session) return;
+    busy = true;
+    setBusy(true);
+    try {
+      const r = await call(action, args);
+      if (r && r.ok) toast(r.message, "ok");
+      else if (r && r.error === "needs_confirm") openConfirm();
+      else if (r) toast(r.message || "Det gick inte", "bad");
+      return r;
+    } catch (e) {
+      if (e && e.code === "auth") return;
+      toast(e instanceof TypeError ? "Svaret uteblev. Kontrollera statusen innan du trycker igen." : errorText(e), "bad");
+    } finally {
+      busy = false;
+      setBusy(false);
+    }
+  }
+
+  function setBusy(on) {
+    document.querySelectorAll("#app button").forEach((b) => { b.disabled = on || !session; });
+    if (!on && !$("addForm").hidden) validate();
+  }
+
+  /* Statusurtavla */
+  function openConfirm() {
+    if (!S || !S.active || !S.proposal) return;
+    const p = S.proposal;
+    if (p.atMax) {
+      $("confirmText").textContent = "Värmen går redan till maxtiden " + t(S.active.capAt) + " (2 timmar i följd).";
+      $("confirmYes").hidden = true;
+    } else {
+      $("confirmText").textContent = "Värmen är igång till " + t(S.active.endAt) + ". Förläng till " + t(p.newEnd) + (p.capped ? " (max)" : "") + "?";
+      $("confirmYes").textContent = "Förläng till " + t(p.newEnd);
+      $("confirmYes").hidden = false;
+    }
+    $("confirm").hidden = false;
+    $("mainActions").hidden = true;
+  }
+  function closeConfirm() { $("confirm").hidden = true; $("mainActions").hidden = false; }
+
+  const C = 2 * Math.PI * 52;
+  function nextBooking() {
+    if (!S) return null;
+    return (S.week.bookings || []).find((b) => !b.session_id && new Date(b.start_at) > Date.now()) || null;
+  }
+  function renderDial() {
+    const a = S && S.active;
+    const d = S && S.device;
+    $("dial").classList.toggle("on", !!a);
+    $("dial").classList.toggle("manual", !!a && a.kind === "manual");
+    $("startBtn").textContent = a ? "Förläng" : "Starta " + ((S && S.settings.manual_minutes) || 60) + " min";
+    $("stopBtn").hidden = !a;
+    if (!a && !$("confirm").hidden) closeConfirm();
+    if (a) {
+      const total = new Date(a.endAt) - new Date(a.startedAt);
+      const left = Math.max(0, new Date(a.endAt) - Date.now());
+      const mins = Math.ceil(left / MIN);
+      $("ringBig").textContent = mins >= 60 ? Math.floor(mins / 60) + ":" + String(mins % 60).padStart(2, "0") : String(mins);
+      $("ringSmall").textContent = mins >= 60 ? "tim kvar" : "min kvar";
+      $("bar").style.strokeDashoffset = String(C * (1 - (total > 0 ? left / total : 0)));
+      $("word").textContent = a.lowSince ? "Ingen ström" : "Värmer";
+      const src = a.kind === "manual" ? "Manuell start" : "Värme";
+      $("detail").textContent = "Till " + t(a.endAt) + " · " + src + (a.lowSince ? " · stängs av om ingen ström kommer tillbaka" : "");
+    } else {
+      const n = nextBooking();
+      $("ringBig").textContent = "Av";
+      $("ringSmall").textContent = n ? "nästa " + t(n.start_at) : "inget planerat";
+      $("bar").style.strokeDashoffset = String(C);
+      $("word").textContent = S ? "Avstängd" : "Ansluter…";
+      $("detail").textContent = !S ? "Hämtar status från uttaget." : n ? "Nästa Värme " + dayOf(new Date(n.start_at).getTime()).toLowerCase() + " " + t(n.start_at) + "–" + t(n.end_at) + "." : "Ingen Värme inlagd de närmaste 7 dagarna.";
+    }
+    const m = [];
+    if (d) {
+      if (d.error) m.push("<span>⚠ " + esc(d.error) + "</span>");
+      else if (d.powerW !== null && d.powerW !== undefined) m.push("<span>Effekt <b class='mono'>" + Math.round(d.powerW) + " W</b></span>");
+      if (d.readAt) m.push("<span>Läst <b class='mono'>" + tfs.format(new Date(d.readAt)) + "</b></span>");
+    }
+    $("meter").innerHTML = m.join("");
+  }
+
+  /* Kalender */
+  function events() {
+    const out = [];
+    for (const b of S.week.bookings || []) {
+      out.push({ type: "v", id: b.uid, start: new Date(b.start_at).getTime(), end: new Date(b.end_at).getTime(), status: b.session_status || "planned", reason: b.end_reason, title: "Värme" });
+    }
+    for (const m of S.week.manual || []) {
+      const end = m.status === "active" && S.active ? new Date(S.active.endAt).getTime() : new Date(m.end_at).getTime();
+      out.push({ type: "m", id: String(m.id), start: new Date(m.started_at).getTime(), end, status: m.status, reason: m.end_reason, title: "Manuell start" });
+    }
+    return out;
+  }
+
+  function renderCalendar() {
+    const ds = days();
+    const now = Date.now();
+    const grid = $("calGrid");
+    grid.style.setProperty("--h", H + "px");
+    let html = "<div class='corner'></div>";
+    ds.forEach((dy) => { html += "<div class='dayhead" + (dy.i === 0 ? " today" : "") + "'>" + esc(dy.i === 0 ? "Idag" : wdShort.format(new Date(dy.start + 3600000)).replace(".", "")) + "<b>" + dy.d + "</b></div>"; });
+    html += "<div class='axis' style='height:" + 24 * H + "px'>";
+    for (let h = 3; h < 24; h += 3) html += "<span style='top:" + h * H + "px'>" + String(h).padStart(2, "0") + "</span>";
+    html += "</div>";
+    const evs = S ? events() : [];
+    ds.forEach((dy) => {
+      const span = dy.end - dy.start;
+      const y = (ms) => ((ms - dy.start) / span) * 24 * H;
+      html += "<div class='col" + (dy.i === 0 ? " today" : "") + "' data-day='" + dy.i + "' tabindex='0' role='button' aria-label='Lägg till Värme " + esc(dayLabel(dy)) + "' style='height:" + 24 * H + "px'>";
+      if (dy.i === 0) {
+        html += "<div class='past' style='height:" + y(now) + "px'></div><div class='nowline' style='top:" + y(now) + "px'></div>";
+      }
+      for (const e of evs) {
+        const s = Math.max(e.start, dy.start), en = Math.min(e.end, dy.end);
+        if (en <= s) continue;
+        const top = y(s), hgt = Math.max(14, y(en) - top);
+        const sel = selected && selected.type === e.type && selected.id === e.id ? " sel" : "";
+        html += "<div class='ev " + e.type + " " + e.status + sel + "' data-type='" + e.type + "' data-id='" + esc(e.id) + "' tabindex='0' role='button' aria-label='" + esc(e.title + " " + t(e.start) + " till " + t(e.end)) + "' style='top:" + top + "px;height:" + hgt + "px'>" +
+          t(e.start) + (hgt > 30 ? "<br>" + t(e.end) : "") + "</div>";
+      }
+      html += "</div>";
+    });
+    const keepScroll = $("calScroll").scrollTop;
+    grid.innerHTML = html;
+    if (!didScroll) {
+      didScroll = true;
+      const p = parts(now);
+      $("calScroll").scrollTop = Math.max(0, (p.h - 2) * H);
+    } else {
+      $("calScroll").scrollTop = keepScroll;
+    }
+  }
+
+  function statusText(e) {
+    if (e.status === "planned") return e.start > Date.now() ? "Planerad." : "Startar strax.";
+    if (e.status === "active") return "Pågår nu.";
+    if (e.status === "done") return "Klar. " + (e.reason || "");
+    if (e.status === "stopped") return "Stoppad. " + (e.reason || "");
+    if (e.status === "no_load") return "Ingen värmare ansluten.";
+    return "";
+  }
+
+  function showDetail(type, id) {
+    const e = events().find((x) => x.type === type && x.id === id);
+    if (!e) { closeDetail(); return; }
+    selected = { type, id };
+    closeAdd();
+    const p = $("detailPanel");
+    p.className = "panel " + type;
+    $("dTitle").textContent = e.title;
+    $("dText").textContent = dayOf(e.start) + " " + t(e.start) + "–" + t(e.end) + " (" + dur(e.end - e.start) + "). " + statusText(e);
+    const acts = $("dActions");
+    acts.innerHTML = "";
+    const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.addEventListener("click", fn); acts.appendChild(b); return b; };
+    if (type === "v") {
+      const running = e.status === "active";
+      const del = add(running ? "Stoppa och ta bort" : "Ta bort", "danger", () => {
+        if (del.dataset.armed) { act("delete_booking", { uid: id }).then((r) => { if (r && r.ok) closeDetail(); }); return; }
+        del.dataset.armed = "1";
+        del.textContent = running ? "Bekräfta: stoppa och ta bort" : "Bekräfta borttagning";
+      });
+    } else if (e.status === "active") {
+      add("Stoppa", "danger", () => act("stop"));
+    }
+    add("Stäng", "ghost", closeDetail);
+    p.hidden = false;
+    renderCalendar();
+  }
+  function closeDetail() { selected = null; $("detailPanel").hidden = true; if (S) renderCalendar(); }
+
+  /* Lägg till Värme */
+  function openAdd(dayIdx, minutes) {
+    closeDetail();
+    const ds = days();
+    $("fDay").innerHTML = ds.map((dy) => "<option value='" + dy.i + "'>" + esc(dayLabel(dy) + (dy.i < 2 ? " " + dy.d + "/" + dy.mo : "")) + "</option>").join("");
+    let start = minutes;
+    if (start === undefined) {
+      const p = parts(Date.now());
+      start = Math.ceil((p.h * 60 + p.mi + 5) / 15) * 15;
+      dayIdx = 0;
+      if (start >= 24 * 60) { start = 7 * 60; dayIdx = 1; }
+    }
+    $("fDay").value = String(dayIdx);
+    const end = Math.min(start + 30, 24 * 60 - 5);
+    $("fStart").value = hhmm(start);
+    $("fEnd").value = hhmm(end);
+    $("addForm").hidden = false;
+    validate();
+    $("fStart").focus();
+  }
+  function closeAdd() { $("addForm").hidden = true; }
+  const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+
+  function formTimes() {
+    const dy = days()[+$("fDay").value];
+    const [sh, sm] = ($("fStart").value || "").split(":").map(Number);
+    const [eh, em] = ($("fEnd").value || "").split(":").map(Number);
+    if (!dy || isNaN(sh) || isNaN(eh)) return null;
+    const start = wall(dy.y, dy.mo, dy.d, sh, sm);
+    let end = wall(dy.y, dy.mo, dy.d, eh, em);
+    if (end <= start) end = wall(dy.y, dy.mo, dy.d + 1, eh, em); // över midnatt
+    return { start, end };
+  }
+  function validate() {
+    const f = formTimes();
+    const hint = $("fHint");
+    let msg = "", bad = false;
+    const max = (S && S.settings.max_minutes) || 120;
+    if (!f) { msg = "Välj start och slut."; bad = true; }
+    else if (f.end <= Date.now()) { msg = "Tiden har redan passerat."; bad = true; }
+    else if (f.end - f.start > max * MIN) { msg = "Högst " + max / 60 + " timmar. Nu: " + dur(f.end - f.start) + "."; bad = true; }
+    else if (S && (S.week.bookings || []).some((b) => new Date(b.start_at) < f.end && new Date(b.end_at) > f.start)) { msg = "Krockar med en annan Värme."; bad = true; }
+    else msg = "Värmen går i " + dur(f.end - f.start) + (f.start <= Date.now() ? " och startar direkt." : ".");
+    hint.textContent = msg;
+    hint.className = "hint" + (bad ? " bad" : "");
+    $("fSave").disabled = bad || busy || !session;
+    return !bad;
+  }
+
+  /* Listor */
+  function pillFor(e) {
+    if (e.status === "active") return "<span class='pill " + (e.type === "m" ? "man" : "heat") + "'>Pågår</span>";
+    if (e.status === "done") return "<span class='pill ok'>Klar</span>";
+    if (e.status === "stopped") return "<span class='pill'>Stoppad</span>";
+    if (e.status === "no_load") return "<span class='pill bad'>Ingen värmare</span>";
+    return "<span class='pill heat'>Planerad</span>";
+  }
+  function renderLists() {
+    const now = Date.now();
+    const up = events().filter((e) => e.end > now && (e.status === "planned" || e.status === "active")).sort((a, b) => a.start - b.start);
+    $("upcoming").innerHTML = up.length ? up.map((e) =>
+      "<button type='button' class='row' data-type='" + e.type + "' data-id='" + esc(e.id) + "'><span class='when'>" + esc(dayOf(e.start).split(" ")[0]) + "<b>" + t(e.start) + "</b></span>" +
+      "<span class='what'><div><span class='dot' style='background: var(--" + (e.type === "m" ? "manual" : "heat") + ")'></span>" + esc(e.title) + "</div><small class='mono'>" + t(e.start) + "–" + t(e.end) + " · " + dur(e.end - e.start) + "</small></span>" +
+      pillFor(e) + "</button>").join("") : "<div class='empty'>Inget inlagt. Tryck i kalendern eller på + Lägg till Värme.</div>";
+
+  }
+
+  let formFilled = false;
+  function renderSettings() {
+    const s = S.settings;
+    $("keyState").textContent = s.shelly_auth_key_set ? "En nyckel är sparad. Lämna tomt för att behålla den." : "Ingen nyckel sparad.";
+    if (formFilled) return;
+    formFilled = true;
+    $("shelly_host").value = s.shelly_host || "";
+    $("shelly_device_id").value = s.shelly_device_id || "";
+    $("power_threshold_w").value = s.power_threshold_w;
+    $("manual_minutes").value = s.manual_minutes;
+    // Öppna inställningarna direkt om Shelly-uppgifterna saknas.
+    if (!s.shelly_host || !s.shelly_device_id || !s.shelly_auth_key_set) $("settingsBox").open = true;
+  }
+
+  function render() {
+    if (!S) return;
+    renderDial();
+    renderCalendar();
+    renderLists();
+    renderSettings();
+    if (selected && !$("detailPanel").hidden) {
+      const e = events().find((x) => x.type === selected.type && x.id === selected.id);
+      if (!e) closeDetail();
+    }
+    if (!$("addForm").hidden) validate();
+  }
+
+  /* Händelser */
+  $("startBtn").addEventListener("click", () => { if (S && S.active) openConfirm(); else act("start"); });
+  $("confirmYes").addEventListener("click", async () => { closeConfirm(); await act("start", { confirmed: true }); });
+  $("confirmNo").addEventListener("click", closeConfirm);
+  $("stopBtn").addEventListener("click", () => act("stop"));
+  $("addBtn").addEventListener("click", () => openAdd());
+  $("fCancel").addEventListener("click", closeAdd);
+  ["fDay", "fStart", "fEnd"].forEach((id) => $(id).addEventListener("input", validate));
+  $("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    const f = formTimes();
+    act("add_booking", { start: new Date(f.start).toISOString(), end: new Date(f.end).toISOString() }).then((r) => { if (r && r.ok) closeAdd(); });
+  });
+
+  function onCalendar(e) {
+    const ev = e.target.closest(".ev");
+    if (ev) { showDetail(ev.dataset.type, ev.dataset.id); return; }
+    const col = e.target.closest(".col");
+    if (!col || !S) return;
+    const rect = col.getBoundingClientRect();
+    const minutes = Math.min(23 * 60 + 30, Math.max(0, Math.floor(((e.clientY - rect.top) / H) * 60 / 15) * 15));
+    openAdd(+col.dataset.day, minutes);
+  }
+  $("calGrid").addEventListener("click", onCalendar);
+  $("calGrid").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const ev = e.target.closest(".ev");
+    if (ev) { e.preventDefault(); showDetail(ev.dataset.type, ev.dataset.id); return; }
+    const col = e.target.closest(".col");
+    if (col) { e.preventDefault(); openAdd(+col.dataset.day, 7 * 60); }
+  });
+  $("upcoming").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) showDetail(r.dataset.type, r.dataset.id); });
+
+  $("settingsForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const settings = {
+      manual_minutes: f.get("manual_minutes"), shelly_host: f.get("shelly_host"),
+      shelly_device_id: f.get("shelly_device_id"), power_threshold_w: f.get("power_threshold_w"),
+    };
+    const key = f.get("shelly_auth_key");
+    if (key) settings.shelly_auth_key = key;
+    act("settings", { settings }).then((r) => { if (r && r.ok) $("shelly_auth_key").value = ""; });
+  });
+
+  setInterval(() => { if (S) renderDial(); }, 1000);
+  setInterval(() => { if (S && !busy) renderCalendar(); }, 60000);
+  setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const hint = $("lHint");
+    hint.hidden = true;
+    $("lBtn").disabled = true;
+    try {
+      const user = $("lUser").value.trim().toLowerCase();
+      saveSession(await authPost("password", { email: user.includes("@") ? user : user + DOMAIN, password: $("lPass").value.normalize("NFC") }));
+      $("lPass").value = "";
+      showApp(true);
+      setBusy(false);
+      await refresh();
+    } catch (err) {
+      hint.textContent = err.status === 400 ? "Fel användarnamn eller lösenord." : err.status === 429 ? "För många försök. Vänta en stund." : errorText(err);
+      hint.hidden = false;
+    } finally {
+      $("lBtn").disabled = false;
+    }
+  });
+  $("logoutBtn").addEventListener("click", () => signOut());
+  $("gearBtn").addEventListener("click", () => {
+    $("settingsBox").open = true;
+    $("settingsBox").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("manual_minutes").focus({ preventScroll: true });
+  });
+
+  renderCalendar();
+
+  session = loadSession();
+  showApp(!!session);
+  if (session) { setBusy(false); refresh(); }
+})();
+</script>
+</body>
+</html>

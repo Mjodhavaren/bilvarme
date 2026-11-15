@@ -322,7 +322,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   const DOMAIN = "@bilvarme.local"; // användarnamn blir <namn>@bilvarme.local i Supabase Auth
   const STORE = "bilvarme.session";
   const TZ = "Europe/Stockholm";
-  const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "settings"]);
+  const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "delete_session", "settings"]);
   const H = 24; // pixlar per timme i kalendern
   const MIN = 60000;
   const $ = (id) => document.getElementById(id);
@@ -615,16 +615,17 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     const acts = $("dActions");
     acts.innerHTML = "";
     const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.addEventListener("click", fn); acts.appendChild(b); return b; };
-    if (type === "v") {
-      const running = e.status === "active";
-      const del = add(running ? "Stoppa och ta bort" : "Ta bort", "danger", () => {
-        if (del.dataset.armed) { act("delete_booking", { uid: id }).then((r) => { if (r && r.ok) closeDetail(); }); return; }
-        del.dataset.armed = "1";
-        del.textContent = running ? "Bekräfta: stoppa och ta bort" : "Bekräfta borttagning";
-      });
-    } else if (e.status === "active") {
-      add("Stoppa", "danger", () => act("stop"));
-    }
+    const running = e.status === "active";
+    if (type === "m" && running) add("Stoppa", "", () => act("stop"));
+    const del = add(running ? "Stoppa och ta bort" : "Ta bort", "danger", () => {
+      if (del.dataset.armed) {
+        const req = type === "v" ? act("delete_booking", { uid: id }) : act("delete_session", { id: Number(id) });
+        req.then((r) => { if (r && r.ok) closeDetail(); });
+        return;
+      }
+      del.dataset.armed = "1";
+      del.textContent = running ? "Bekräfta: stoppa och ta bort" : "Bekräfta borttagning";
+    });
     add("Stäng", "ghost", closeDetail);
     p.hidden = false;
     renderCalendar();

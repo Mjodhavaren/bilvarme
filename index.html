@@ -31,6 +31,7 @@
   --bad: #b3372d;
   --bad-soft: #f7dcd8;
   --on-heat: #ffffff;
+  --steam: rgba(110, 126, 140, 0.9);
   --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
   --body: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -41,7 +42,7 @@
     --fg: #e4ecf1; --muted: #90a2b0; --frost: #5f8aa8; --heat: #ff9447; --heat-soft: #3a2517;
     --manual: #7fa4ff; --manual-soft: #1c2a4a; --today: #18242d; --past: rgba(0, 0, 0, 0.22);
     --ok: #6fcf98; --ok-soft: #173326; --warn: #e8bf55; --warn-soft: #362c12; --bad: #ff8a7d; --bad-soft: #3c1c19;
-    --on-heat: #1a0f07; color-scheme: dark;
+    --on-heat: #1a0f07; --steam: rgba(225, 233, 240, 0.85); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -49,7 +50,7 @@
   --fg: #e4ecf1; --muted: #90a2b0; --frost: #5f8aa8; --heat: #ff9447; --heat-soft: #3a2517;
   --manual: #7fa4ff; --manual-soft: #1c2a4a; --today: #18242d; --past: rgba(0, 0, 0, 0.22);
   --ok: #6fcf98; --ok-soft: #173326; --warn: #e8bf55; --warn-soft: #362c12; --bad: #ff8a7d; --bad-soft: #3c1c19;
-  --on-heat: #1a0f07; color-scheme: dark;
+  --on-heat: #1a0f07; --steam: rgba(225, 233, 240, 0.85); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -77,6 +78,26 @@ h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em; colo
 .ring-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .ring-label .big { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
 .ring-label .small { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+.ring-label .big.long { font-size: 1.45rem; }
+/* Pågående värme: tydlig ram runt urtavlan och ånga som stiger från klockan. */
+.dial { transition: border-color 0.3s, box-shadow 0.3s; }
+.dial.on { border-color: var(--heat); box-shadow: 0 0 0 3px var(--heat-soft); }
+.dial.on.manual { border-color: var(--manual); box-shadow: 0 0 0 3px var(--manual-soft); }
+.dial-top { transition: margin-top 0.3s; }
+.dial.on .dial-top { margin-top: 30px; }
+.steam { position: absolute; left: 0; right: 0; top: 2px; height: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
+.dial.on .steam { opacity: 1; }
+.steam i { position: absolute; bottom: 0; width: 12px; height: 34px; border-radius: 50%; background: var(--steam); filter: blur(5px); opacity: 0; }
+.dial.on .steam i { animation: steam 3.2s ease-out infinite; }
+.steam i:nth-child(1) { left: 28%; }
+.steam i:nth-child(2) { left: 46%; height: 42px; animation-delay: 1.1s !important; }
+.steam i:nth-child(3) { left: 64%; animation-delay: 2.1s !important; }
+@keyframes steam {
+  0% { transform: translate(0, 10px) scaleX(1); opacity: 0; }
+  20% { opacity: 0.6; }
+  60% { transform: translate(6px, -18px) scaleX(1.6); opacity: 0.35; }
+  100% { transform: translate(-4px, -40px) scaleX(2.4); opacity: 0; }
+}
 .state { display: grid; gap: 6px; min-width: 0; }
 .state .word { font-family: var(--display); font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; }
 .dial.on .state .word { color: var(--heat); }
@@ -195,7 +216,7 @@ form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
   .row { grid-template-columns: 70px 1fr; }
   .row .pill { grid-column: 2; justify-self: start; }
 }
-@media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } .dial.on .steam i { animation: none; opacity: 0.35; } }
 .login { max-width: 360px; margin: 12vh auto 0; }
 header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .gear { display: inline-flex; align-items: center; padding: 8px 10px; }
@@ -225,6 +246,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     <div class="dial-top">
       <div class="ring" aria-hidden="true">
         <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="10"/><circle class="bar" id="bar" cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+        <div class="steam"><i></i><i></i><i></i></div>
         <div class="ring-label"><div class="big" id="ringBig">–</div><div class="small" id="ringSmall">min kvar</div></div>
       </div>
       <div class="state">
@@ -518,9 +540,10 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     if (a) {
       const total = new Date(a.endAt) - new Date(a.startedAt);
       const left = Math.max(0, new Date(a.endAt) - Date.now());
-      const mins = Math.ceil(left / MIN);
-      $("ringBig").textContent = mins >= 60 ? Math.floor(mins / 60) + ":" + String(mins % 60).padStart(2, "0") : String(mins);
-      $("ringSmall").textContent = mins >= 60 ? "tim kvar" : "min kvar";
+      const secs = Math.ceil(left / 1000), hh = Math.floor(secs / 3600), mm = Math.floor((secs % 3600) / 60), ss = String(secs % 60).padStart(2, "0");
+      $("ringBig").textContent = hh ? hh + ":" + String(mm).padStart(2, "0") + ":" + ss : mm + ":" + ss;
+      $("ringBig").classList.toggle("long", hh > 0);
+      $("ringSmall").textContent = "kvar";
       $("bar").style.strokeDashoffset = String(C * (1 - (total > 0 ? left / total : 0)));
       $("word").textContent = a.lowSince ? "Ingen ström" : "Värmer";
       const src = a.kind === "manual" ? "Manuell start" : "Värme";
@@ -528,6 +551,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     } else {
       const n = nextBooking();
       $("ringBig").textContent = "Av";
+      $("ringBig").classList.remove("long");
       $("ringSmall").textContent = n ? "nästa " + t(n.start_at) : "inget planerat";
       $("bar").style.strokeDashoffset = String(C);
       $("word").textContent = S ? "Avstängd" : "Ansluter…";
@@ -573,13 +597,32 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       if (dy.i === 0) {
         html += "<div class='past' style='height:" + y(now) + "px'></div><div class='nowline' style='top:" + y(now) + "px'></div>";
       }
+      const items = [];
       for (const e of evs) {
         const s = Math.max(e.start, dy.start), en = Math.min(e.end, dy.end);
         if (en <= s) continue;
-        const top = y(s), hgt = Math.max(14, y(en) - top);
+        const top = y(s);
+        items.push({ e, top, hgt: Math.max(14, y(en) - top) });
+      }
+      // Aktiviteter som överlappar läggs bredvid varandra, som i en vanlig kalender.
+      items.sort((a, b) => a.top - b.top || b.hgt - a.hgt);
+      let group = [], cols = [], groupEnd = -1;
+      const flush = () => { group.forEach((it) => { it.n = cols.length; }); group = []; cols = []; groupEnd = -1; };
+      for (const it of items) {
+        if (group.length && it.top >= groupEnd) flush();
+        let c = cols.findIndex((bottom) => bottom <= it.top);
+        if (c < 0) { c = cols.length; cols.push(0); }
+        cols[c] = it.top + it.hgt;
+        it.c = c;
+        group.push(it);
+        groupEnd = Math.max(groupEnd, it.top + it.hgt);
+      }
+      flush();
+      for (const it of items) {
+        const e = it.e, w = 100 / it.n;
         const sel = selected && selected.type === e.type && selected.id === e.id ? " sel" : "";
-        html += "<div class='ev " + e.type + " " + e.status + sel + "' data-type='" + e.type + "' data-id='" + esc(e.id) + "' tabindex='0' role='button' aria-label='" + esc(e.title + " " + t(e.start) + " till " + t(e.end)) + "' style='top:" + top + "px;height:" + hgt + "px'>" +
-          t(e.start) + (hgt > 30 ? "<br>" + t(e.end) : "") + "</div>";
+        html += "<div class='ev " + e.type + " " + e.status + sel + "' data-type='" + e.type + "' data-id='" + esc(e.id) + "' tabindex='0' role='button' aria-label='" + esc(e.title + " " + t(e.start) + " till " + t(e.end)) + "' style='top:" + it.top + "px;height:" + it.hgt + "px;left:calc(" + w * it.c + "% + 2px);width:calc(" + w + "% - 4px)'>" +
+          t(e.start) + (it.hgt > 30 ? "<br>" + t(e.end) : "") + "</div>";
       }
       html += "</div>";
     });

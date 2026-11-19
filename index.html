@@ -231,6 +231,12 @@ dialog.modal::backdrop { background: rgba(10, 16, 22, 0.6); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 14px 14px; }
 .modal-head h3 { margin: 0; font-family: var(--display); font-size: 1.3rem; font-weight: 700; }
 form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
+.leads { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px 12px; margin: 0; display: grid; gap: 10px; min-width: 0; }
+.leads legend { font-size: 0.85rem; font-weight: 600; padding: 0 6px; }
+.leads p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.lead-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 68px auto; gap: 8px; align-items: center; font-size: 0.9rem; }
+.lead-row .between { grid-column: 1 / 3; }
+.lead-row input, .lead-row select { padding: 8px; text-align: right; font-family: var(--mono); }
 
 @media (max-width: 440px) {
   .dial-top { grid-template-columns: 1fr; justify-items: center; text-align: center; }
@@ -357,6 +363,22 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       <label for="manual_minutes">Starta-knappen värmer i (minuter) <small>Längden på en manuellt startad värme. 1–120 minuter.</small>
         <input id="manual_minutes" name="manual_minutes" type="number" min="1" max="120" step="1" value="60" required>
       </label>
+      <fieldset class="leads">
+        <legend>Värmetid före avresa</legend>
+        <p>Prognosen en timme före avresan avgör hur länge värmaren går.</p>
+        <div class="lead-row">
+          <select id="temp_mild_c" name="temp_mild_c" aria-label="Gräns för milt väder, grader"></select><span>°C eller varmare</span>
+          <input id="lead_mild_min" name="lead_mild_min" type="number" min="1" max="120" step="1" value="30" required aria-label="Värmetid vid milt väder, minuter"><span>min</span>
+        </div>
+        <div class="lead-row">
+          <span class="between">Däremellan</span>
+          <input id="lead_mid_min" name="lead_mid_min" type="number" min="1" max="120" step="1" value="45" required aria-label="Värmetid däremellan, minuter"><span>min</span>
+        </div>
+        <div class="lead-row">
+          <select id="temp_cold_c" name="temp_cold_c" aria-label="Gräns för kallt väder, grader"></select><span>°C eller kallare</span>
+          <input id="lead_cold_min" name="lead_cold_min" type="number" min="1" max="120" step="1" value="60" required aria-label="Värmetid vid kallt väder, minuter"><span>min</span>
+        </div>
+      </fieldset>
       <div class="hint" id="shellyState"></div>
       <label for="power_threshold_w">Värmaren räknas som på över (W) <small>Drar den mindre än så i en minut räknas den som urkopplad och pluggen stängs av.</small>
         <input id="power_threshold_w" name="power_threshold_w" type="number" min="1" max="500" step="1" value="50">
@@ -375,7 +397,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   const TZ = "Europe/Stockholm";
   const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "delete_session", "settings"]);
   const H = 24; // pixlar per timme i kalendern
-  const LEAD_MIN = 45; // värmen startar så här många minuter före avresan
   // SMHI:s öppna punktprognos för Vendelsö (avrundad koordinat). Bara för visning.
   const WEATHER_URL = "https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/geotype/point/lon/18.19/lat/59.21/data.json";
   const FC_HOURS = 72;
@@ -609,7 +630,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   function events() {
     const out = [];
     for (const b of S.week.bookings || []) {
-      out.push({ type: "v", id: b.uid, start: new Date(b.start_at).getTime(), end: new Date(b.end_at).getTime(), status: b.session_status || "planned", reason: b.end_reason, title: "Värme" });
+      out.push({ type: "v", id: b.uid, start: new Date(b.start_at).getTime(), end: new Date(b.end_at).getTime(), status: b.session_status || "planned", reason: b.end_reason, title: "Värme", temp: b.forecast_temp === null || b.forecast_temp === undefined ? null : Number(b.forecast_temp) });
     }
     // Manuella starter visas inte i kalendern, bara i urtavlan medan de pågår.
     return out;
@@ -690,7 +711,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     const p = $("detailPanel");
     p.className = "panel " + type;
     $("dTitle").textContent = type === "v" ? "Avresa " + t(e.end) : e.title;
-    $("dText").textContent = dayOf(e.end) + ". Värmen går " + t(e.start) + "–" + t(e.end) + " (" + dur(e.end - e.start) + "). " + statusText(e);
+    $("dText").textContent = dayOf(e.end) + ". Värmen går " + t(e.start) + "–" + t(e.end) + " (" + dur(e.end - e.start) + (e.temp === null || e.temp === undefined ? "" : ", prognos " + fmtT(e.temp, 0) + "°") + "). " + statusText(e);
     const acts = $("dActions");
     acts.innerHTML = "";
     const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.addEventListener("click", fn); acts.appendChild(b); return b; };
@@ -711,7 +732,22 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   }
   function closeDetail() { selected = null; $("detailPanel").hidden = true; if (S) renderCalendar(); }
 
-  /* Lägg till avresa: värmen startar LEAD_MIN minuter före */
+  /* Lägg till avresa. Servern bestämmer värmetiden utifrån prognosen en timme före
+     avresan; leadFor() räknar på samma sätt, men bara för förhandsvisningen. */
+  const LEAD_KEYS = ["temp_mild_c", "temp_cold_c", "lead_mild_min", "lead_mid_min", "lead_cold_min"];
+  function maxLead() {
+    const c = S && S.settings;
+    return c && c.lead_mid_min ? Math.max(c.lead_mild_min, c.lead_mid_min, c.lead_cold_min) : 60;
+  }
+  function leadFor(end) {
+    const c = S && S.settings;
+    if (!c || !c.lead_mid_min) return { lead: 45, temp: null };
+    const at = end - HOUR;
+    const temp = W && at <= W[W.length - 1].t && at >= W[0].t - 3 * HOUR ? tempAt(at) : null;
+    if (temp === null) return { lead: c.lead_mid_min, temp };
+    const whole = Math.round(temp);
+    return { lead: whole >= c.temp_mild_c ? c.lead_mild_min : whole <= c.temp_cold_c ? c.lead_cold_min : c.lead_mid_min, temp };
+  }
   function openAdd(dayIdx, minutes) {
     closeDetail();
     const ds = days();
@@ -719,7 +755,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     let dep = minutes; // avresetid i minuter efter midnatt
     if (dep === undefined) {
       const p = parts(Date.now());
-      dep = Math.ceil((p.h * 60 + p.mi + LEAD_MIN) / 5) * 5; // tidigaste avresan med full värmetid
+      dep = Math.ceil((p.h * 60 + p.mi + maxLead()) / 5) * 5; // tidigaste avresan med full värmetid
       dayIdx = 0;
       if (dep >= 24 * 60) { dep -= 24 * 60; dayIdx = 1; }
     }
@@ -737,7 +773,8 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     const [h, m] = ($("fDep").value || "").split(":").map(Number);
     if (!dy || isNaN(h) || isNaN(m)) return null;
     const end = wall(dy.y, dy.mo, dy.d, h, m); // avresan
-    return { start: end - LEAD_MIN * MIN, end };
+    const { lead, temp } = leadFor(end);
+    return { start: end - lead * MIN, end, lead, temp };
   }
   function validate() {
     const f = formTimes();
@@ -746,9 +783,11 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     const now = Date.now();
     if (!f) { msg = "Välj när du ska åka."; bad = true; }
     else if (f.end <= now) { msg = "Tiden har redan passerat."; bad = true; }
-    else if (S && (S.week.bookings || []).some((b) => new Date(b.start_at) < f.end && new Date(b.end_at) > f.start)) { msg = "Krockar med en annan avresa."; bad = true; }
-    else if (f.start <= now) msg = "Mindre än " + LEAD_MIN + " min kvar: värmen startar direkt och går i " + dur(f.end - now) + ".";
-    else msg = "Värmen startar " + t(f.start) + ", " + LEAD_MIN + " min före avresan.";
+    else if (S && (S.week.bookings || []).some((b) => { const e = new Date(b.end_at).getTime(); return e > now && Math.abs(e - f.end) < maxLead() * MIN; })) { msg = "Ligger för nära en annan avresa (minst " + maxLead() + " min emellan)."; bad = true; }
+    else {
+      const why = f.temp === null ? " Ingen prognos för den tiden än." : " Prognos " + fmtT(f.temp, 0) + "°.";
+      msg = (f.start <= now ? "Mindre än " + f.lead + " min kvar: värmen startar direkt och går i " + dur(f.end - now) + "." : "Värmen startar " + t(f.start) + ", " + f.lead + " min före avresan.") + why;
+    }
     hint.textContent = msg;
     hint.className = "hint" + (bad ? " bad" : "");
     $("fSave").disabled = bad || busy || !session;
@@ -795,9 +834,11 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     let end = wall(p.y, p.mo, p.d, h, m);
     const tomorrow = end <= Date.now();
     if (tomorrow) end = wall(p.y, p.mo, p.d + 1, h, m);
-    const start = end - LEAD_MIN * MIN;
-    act("add_booking", { start: new Date(start).toISOString(), end: new Date(end).toISOString() }).then((r) => {
-      if (r && r.ok) toast("Avresa " + b.dataset.time + (tomorrow ? " imorgon" : " idag") + " tillagd. " + (start <= Date.now() ? "Värmen startar direkt." : "Värmen startar " + t(start) + "."), "ok");
+    act("add_booking", { end: new Date(end).toISOString() }).then((r) => {
+      if (!(r && r.ok)) return;
+      const made = ((S && S.week.bookings) || []).find((x) => new Date(x.end_at).getTime() === end);
+      const start = made ? new Date(made.start_at).getTime() : null;
+      toast("Avresa " + b.dataset.time + (tomorrow ? " imorgon" : " idag") + " tillagd." + (start === null ? "" : start <= Date.now() ? " Värmen startar direkt." : " Värmen startar " + t(start) + " (" + dur(end - start) + ")."), "ok");
     });
   });
   $("fCancel").addEventListener("click", closeAdd);
@@ -806,7 +847,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     e.preventDefault();
     if (!validate()) return;
     const f = formTimes();
-    act("add_booking", { start: new Date(f.start).toISOString(), end: new Date(f.end).toISOString() }).then((r) => { if (r && r.ok) closeAdd(); });
+    act("add_booking", { end: new Date(f.end).toISOString() }).then((r) => { if (r && r.ok) closeAdd(); });
   });
 
   function onCalendar(e) {
@@ -831,8 +872,15 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     e.preventDefault();
     const f = new FormData(e.target);
     $("settingsBox").close(); // resultatet visas som ett meddelande i appen
-    act("settings", { settings: { manual_minutes: f.get("manual_minutes"), power_threshold_w: f.get("power_threshold_w") } });
+    const settings = { manual_minutes: f.get("manual_minutes"), power_threshold_w: f.get("power_threshold_w") };
+    LEAD_KEYS.forEach((k) => { settings[k] = f.get(k); });
+    act("settings", { settings });
   });
+  for (const [id, chosen] of [["temp_mild_c", -5], ["temp_cold_c", -10]]) {
+    let opts = "";
+    for (let v = 10; v >= -30; v--) opts += "<option value='" + v + "'" + (v === chosen ? " selected" : "") + ">" + (v < 0 ? "−" + -v : v) + "</option>";
+    $(id).innerHTML = opts;
+  }
   $("settingsClose").addEventListener("click", () => $("settingsBox").close());
   // Tryck utanför rutan stänger den.
   $("settingsBox").addEventListener("click", (e) => { if (e.target === $("settingsBox")) $("settingsBox").close(); });
@@ -994,6 +1042,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     if (S) { // visa alltid de sparade värdena när rutan öppnas
       $("manual_minutes").value = S.settings.manual_minutes;
       $("power_threshold_w").value = S.settings.power_threshold_w;
+      LEAD_KEYS.forEach((k) => { if (S.settings[k] !== undefined) $(k).value = S.settings[k]; });
     }
     $("settingsBox").showModal();
   });

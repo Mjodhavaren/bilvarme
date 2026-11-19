@@ -201,11 +201,14 @@ button.row:first-child { border-top: 0; }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 
-details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
-summary { padding: 14px; cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
-summary::-webkit-details-marker { display: none; }
-summary::after { content: "+"; color: var(--muted); font-family: var(--mono); }
-details[open] summary::after { content: "–"; }
+/* Inställningarna öppnas som en ruta ovanpå appen. */
+dialog.modal {
+  border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--fg); padding: 0;
+  width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto;
+}
+dialog.modal::backdrop { background: rgba(10, 16, 22, 0.6); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 14px 14px; }
+.modal-head h3 { margin: 0; font-family: var(--display); font-size: 1.3rem; font-weight: 700; }
 form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
 
 @media (max-width: 440px) {
@@ -308,8 +311,11 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     </div>
   </section>
 
-  <details id="settingsBox">
-    <summary>Inställningar</summary>
+  <dialog class="modal" id="settingsBox" aria-labelledby="settingsTitle">
+    <div class="modal-head">
+      <h3 id="settingsTitle">Inställningar</h3>
+      <button type="button" class="small-btn ghost" id="settingsClose" aria-label="Stäng inställningarna">✕</button>
+    </div>
     <form class="settings" id="settingsForm">
       <label for="manual_minutes">Starta-knappen värmer i (minuter) <small>Längden på en manuellt startad värme. 1–120 minuter.</small>
         <input id="manual_minutes" name="manual_minutes" type="number" min="1" max="120" step="1" value="60" required>
@@ -320,7 +326,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       </label>
       <div class="actions"><button class="primary" type="submit" id="saveBtn">Spara</button></div>
     </form>
-  </details>
+  </dialog>
 </div>
 
 <script>
@@ -769,8 +775,12 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   $("settingsForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
+    $("settingsBox").close(); // resultatet visas som ett meddelande i appen
     act("settings", { settings: { manual_minutes: f.get("manual_minutes"), power_threshold_w: f.get("power_threshold_w") } });
   });
+  $("settingsClose").addEventListener("click", () => $("settingsBox").close());
+  // Tryck utanför rutan stänger den.
+  $("settingsBox").addEventListener("click", (e) => { if (e.target === $("settingsBox")) $("settingsBox").close(); });
 
   setInterval(() => { if (S) renderDial(); }, 1000);
   setInterval(() => { if (S && !busy) renderCalendar(); }, 60000);
@@ -798,9 +808,11 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   });
   $("logoutBtn").addEventListener("click", () => signOut());
   $("gearBtn").addEventListener("click", () => {
-    $("settingsBox").open = true;
-    $("settingsBox").scrollIntoView({ behavior: "smooth", block: "start" });
-    $("manual_minutes").focus({ preventScroll: true });
+    if (S) { // visa alltid de sparade värdena när rutan öppnas
+      $("manual_minutes").value = S.settings.manual_minutes;
+      $("power_threshold_w").value = S.settings.power_threshold_w;
+    }
+    $("settingsBox").showModal();
   });
 
   renderCalendar();

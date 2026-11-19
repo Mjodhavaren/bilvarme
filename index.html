@@ -86,9 +86,12 @@ h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em; colo
 .dial-top { transition: margin-top 0.3s; }
 .dial.on .dial-top { margin-top: 30px; }
 .steam { position: absolute; left: 0; right: 0; top: 2px; height: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
-.dial.on .steam { opacity: 1; }
+.dial.hot .steam { opacity: 1; }
+.conf { font-weight: 600; flex-basis: 100%; }
+.conf.ok { color: var(--ok); }
+.conf.bad { color: var(--bad); }
 .steam i { position: absolute; bottom: 0; width: 12px; height: 34px; border-radius: 50%; background: var(--steam); filter: blur(5px); opacity: 0; }
-.dial.on .steam i { animation: steam 3.2s ease-out infinite; }
+.dial.hot .steam i { animation: steam 3.2s ease-out infinite; }
 .steam i:nth-child(1) { left: 28%; }
 .steam i:nth-child(2) { left: 46%; height: 42px; animation-delay: 1.1s !important; }
 .steam i:nth-child(3) { left: 64%; animation-delay: 2.1s !important; }
@@ -216,7 +219,7 @@ form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
   .row { grid-template-columns: 70px 1fr; }
   .row .pill { grid-column: 2; justify-self: start; }
 }
-@media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } .dial.on .steam i { animation: none; opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } .dial.hot .steam i { animation: none; opacity: 0.35; } }
 .login { max-width: 360px; margin: 12vh auto 0; }
 header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .gear { display: inline-flex; align-items: center; padding: 8px 10px; }
@@ -321,8 +324,8 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         <input id="manual_minutes" name="manual_minutes" type="number" min="1" max="120" step="1" value="60" required>
       </label>
       <div class="hint" id="shellyState"></div>
-      <label for="power_threshold_w">Sladd ur när effekten är under (W) <small>Under detta i en minut räknas som urkopplad värmare.</small>
-        <input id="power_threshold_w" name="power_threshold_w" type="number" min="1" max="500" step="1" value="10">
+      <label for="power_threshold_w">Värmaren räknas som på över (W) <small>Drar den mindre än så i en minut räknas den som urkopplad och pluggen stängs av.</small>
+        <input id="power_threshold_w" name="power_threshold_w" type="number" min="1" max="500" step="1" value="50">
       </label>
       <div class="actions"><button class="primary" type="submit" id="saveBtn">Spara</button></div>
     </form>
@@ -524,6 +527,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   function renderDial() {
     const a = S && S.active;
     const d = S && S.device;
+    let confirmed = false;
     $("dial").classList.toggle("on", !!a);
     $("dial").classList.toggle("manual", !!a && a.kind === "manual");
     $("startBtn").textContent = a ? "Förläng" : "Starta " + ((S && S.settings.manual_minutes) || 60) + " min";
@@ -537,7 +541,9 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       $("ringBig").classList.toggle("long", hh > 0);
       $("ringSmall").textContent = "kvar";
       $("bar").style.strokeDashoffset = String(C * (1 - (total > 0 ? left / total : 0)));
-      $("word").textContent = a.lowSince ? "Ingen ström" : "Värmer";
+      // Bekräftat först när pluggen själv rapporterar att värmaren drar ström.
+      confirmed = !!d && !d.error && !!d.output && d.powerW >= S.settings.power_threshold_w && !!d.readAt && Date.now() - new Date(d.readAt) < 45000;
+      $("word").textContent = confirmed ? "Värmer" : a.lowSince ? "Ingen ström" : "Väntar på pluggen…";
       const src = a.kind === "manual" ? "Manuell start" : "Värme";
       $("detail").textContent = "Till " + t(a.endAt) + " · " + src + (a.lowSince ? " · stängs av om ingen ström kommer tillbaka" : "");
     } else {
@@ -549,7 +555,9 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       $("word").textContent = S ? "Avstängd" : "Ansluter…";
       $("detail").textContent = !S ? "Hämtar status från uttaget." : n ? "Nästa Värme " + dayOf(new Date(n.start_at).getTime()).toLowerCase() + " " + t(n.start_at) + "–" + t(n.end_at) + "." : "Ingen Värme inlagd de närmaste 7 dagarna.";
     }
+    $("dial").classList.toggle("hot", confirmed);
     const m = [];
+    if (a) m.push(confirmed ? "<span class='conf ok'>✔ Bekräftat: värmaren drar ström</span>" : "<span class='conf bad'>Inte bekräftat att värmaren drar ström</span>");
     if (d) {
       if (d.error) m.push("<span>⚠ " + esc(d.error) + "</span>");
       else if (d.powerW !== null && d.powerW !== undefined) m.push("<span>Effekt <b class='mono'>" + Math.round(d.powerW) + " W</b></span>");
@@ -802,7 +810,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
   setInterval(() => { if (S) renderDial(); }, 1000);
   setInterval(() => { if (S && !busy) renderCalendar(); }, 60000);
-  setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 20000);
+  setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 10000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 
   $("loginForm").addEventListener("submit", async (e) => {

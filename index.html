@@ -320,15 +320,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       <label for="manual_minutes">Starta-knappen värmer i (minuter) <small>Längden på en manuellt startad värme. 1–120 minuter.</small>
         <input id="manual_minutes" name="manual_minutes" type="number" min="1" max="120" step="1" value="60" required>
       </label>
-      <label for="shelly_host">Shelly-server <small>Shelly-appen → Inställningar → Användarinställningar → Autentiseringsmoln-nyckel</small>
-        <input id="shelly_host" name="shelly_host" type="text" placeholder="shelly-123-eu.shelly.cloud" autocomplete="off">
-      </label>
-      <label for="shelly_device_id">Enhets-id <small>Enheten → Inställningar → Enhetsinformation</small>
-        <input id="shelly_device_id" name="shelly_device_id" type="text" placeholder="t.ex. e4b063f1a2b4" autocomplete="off">
-      </label>
-      <label for="shelly_auth_key">Nyckel <small id="keyState">Ingen nyckel sparad.</small>
-        <input id="shelly_auth_key" name="shelly_auth_key" type="password" placeholder="Klistra in nyckeln" autocomplete="off">
-      </label>
+      <div class="hint" id="shellyState"></div>
       <label for="power_threshold_w">Sladd ur när effekten är under (W) <small>Under detta i en minut räknas som urkopplad värmare.</small>
         <input id="power_threshold_w" name="power_threshold_w" type="number" min="1" max="500" step="1" value="10">
       </label>
@@ -745,15 +737,14 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   let formFilled = false;
   function renderSettings() {
     const s = S.settings;
-    $("keyState").textContent = s.shelly_auth_key_set ? "En nyckel är sparad. Lämna tomt för att behålla den." : "Ingen nyckel sparad.";
+    // Shelly-uppgifterna (server, enhets-id, nyckel) ligger bara på servern och ändras inte härifrån.
+    const linked = s.shelly_host && s.shelly_device_id && s.shelly_auth_key_set;
+    $("shellyState").textContent = linked ? "Shelly-plugg " + s.shelly_device_id + " är kopplad." : "Ingen Shelly-plugg är kopplad på servern.";
+    $("shellyState").className = "hint" + (linked ? "" : " bad");
     if (formFilled) return;
     formFilled = true;
-    $("shelly_host").value = s.shelly_host || "";
-    $("shelly_device_id").value = s.shelly_device_id || "";
     $("power_threshold_w").value = s.power_threshold_w;
     $("manual_minutes").value = s.manual_minutes;
-    // Öppna inställningarna direkt om Shelly-uppgifterna saknas.
-    if (!s.shelly_host || !s.shelly_device_id || !s.shelly_auth_key_set) $("settingsBox").open = true;
   }
 
   function render() {
@@ -806,13 +797,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   $("settingsForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const settings = {
-      manual_minutes: f.get("manual_minutes"), shelly_host: f.get("shelly_host"),
-      shelly_device_id: f.get("shelly_device_id"), power_threshold_w: f.get("power_threshold_w"),
-    };
-    const key = f.get("shelly_auth_key");
-    if (key) settings.shelly_auth_key = key;
-    act("settings", { settings }).then((r) => { if (r && r.ok) $("shelly_auth_key").value = ""; });
+    act("settings", { settings: { manual_minutes: f.get("manual_minutes"), power_threshold_w: f.get("power_threshold_w") } });
   });
 
   setInterval(() => { if (S) renderDial(); }, 1000);

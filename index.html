@@ -251,7 +251,8 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 <form class="panel login" id="loginForm" hidden>
   <h1>Bilvärme</h1>
-  <label for="lUser">Användarnamn<input id="lUser" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+  <!-- Dolt, fast användarnamn så att webbläsaren kan spara lösenordet. -->
+  <input type="text" name="username" value="Bilvärme" autocomplete="username" hidden>
   <label for="lPass">Lösenord<input id="lPass" type="password" autocomplete="current-password" required></label>
   <div class="hint bad" id="lHint" hidden></div>
   <div class="actions"><button class="primary" type="submit" id="lBtn">Logga in</button></div>
@@ -369,7 +370,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 (() => {
   const API = "https://bshqbrpzgewxanvqhgtc.supabase.co";
   const API_KEY = "sb_publishable_9Y3BmHtuFvnFtFizyV6Ipg_EeZWBcgA"; // publik nyckel, ger ingen åtkomst utan inloggning
-  const DOMAIN = "@bilvarme.local"; // användarnamn blir <namn>@bilvarme.local i Supabase Auth
+  const ACCOUNT = "hushall@bilvarme.local"; // hushållets enda konto i Supabase Auth; bara lösenordet skrivs in
   const STORE = "bilvarme.session";
   const TZ = "Europe/Stockholm";
   const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "delete_session", "settings"]);
@@ -975,15 +976,14 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     hint.hidden = true;
     $("lBtn").disabled = true;
     try {
-      const user = $("lUser").value.trim().toLowerCase();
-      saveSession(await authPost("password", { email: user.includes("@") ? user : user + DOMAIN, password: $("lPass").value.normalize("NFC") }));
+      saveSession(await authPost("password", { email: ACCOUNT, password: $("lPass").value.normalize("NFC") }));
       $("lPass").value = "";
       showApp(true);
       setBusy(false);
       loadWeather();
       await refresh();
     } catch (err) {
-      hint.textContent = err.status === 400 ? "Fel användarnamn eller lösenord." : err.status === 429 ? "För många försök. Vänta en stund." : errorText(err);
+      hint.textContent = err.status === 400 ? "Fel lösenord." : err.status === 429 ? "För många försök. Vänta en stund." : errorText(err);
       hint.hidden = false;
     } finally {
       $("lBtn").disabled = false;

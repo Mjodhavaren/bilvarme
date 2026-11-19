@@ -175,7 +175,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .panel.m { border-color: var(--manual); }
 .panel h3 { margin: 0; font-family: var(--display); font-size: 1.2rem; font-weight: 700; }
 .panel p { margin: 0; color: var(--muted); font-size: 0.92rem; }
-.fields { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+.fields { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
 label { display: grid; gap: 4px; font-size: 0.85rem; font-weight: 500; min-width: 0; }
 label small { color: var(--muted); font-weight: 400; }
 input, select { font: inherit; padding: 10px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); width: 100%; min-width: 0; }
@@ -214,8 +214,6 @@ form.settings { display: grid; gap: 12px; padding: 0 14px 16px; }
   .cal-grid { grid-template-columns: 28px repeat(7, minmax(0, 1fr)); }
   .dayhead { font-size: 0.64rem; }
   .ev { font-size: 0.56rem; padding: 2px 2px; }
-  .fields { grid-template-columns: 1fr 1fr; }
-  .fields label:first-child { grid-column: 1 / -1; }
   .row { grid-template-columns: 70px 1fr; }
   .row .pill { grid-column: 2; justify-self: start; }
 }
@@ -276,19 +274,18 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   <section>
     <div class="cal-head">
       <h2>7 dagar framåt</h2>
-      <button type="button" class="small-btn" id="addBtn">+ Lägg till Värme</button>
+      <button type="button" class="small-btn" id="addBtn">+ Lägg till avresa</button>
     </div>
 
     <form class="panel v" id="addForm" hidden>
-      <h3>Ny Värme</h3>
+      <h3>Ny avresa</h3>
       <div class="fields">
         <label for="fDay">Dag<select id="fDay"></select></label>
-        <label for="fStart">Start<input id="fStart" type="time" required></label>
-        <label for="fEnd">Slut<input id="fEnd" type="time" required></label>
+        <label for="fDep">Avresa<input id="fDep" type="time" required></label>
       </div>
       <div class="hint" id="fHint"></div>
       <div class="actions">
-        <button class="primary" type="submit" id="fSave">Spara Värme</button>
+        <button class="primary" type="submit" id="fSave">Spara avresa</button>
         <button class="ghost" type="button" id="fCancel">Avbryt</button>
       </div>
     </form>
@@ -306,7 +303,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       <div class="legend">
         <span><i style="background: var(--heat)"></i>Värme</span>
         <span><i style="background: var(--heat-soft); border: 1px solid var(--heat)"></i>Klar</span>
-        <span>Tryck i kalendern för att lägga till</span>
+        <span>Tryck i kalendern på tiden du ska åka</span>
       </div>
     </div>
   </section>
@@ -335,6 +332,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   const TZ = "Europe/Stockholm";
   const ACTIONS = new Set(["state", "start", "stop", "add_booking", "delete_booking", "delete_session", "settings"]);
   const H = 24; // pixlar per timme i kalendern
+  const LEAD_MIN = 45; // värmen startar så här många minuter före avresan
   const MIN = 60000;
   const $ = (id) => document.getElementById(id);
   const tf = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
@@ -547,7 +545,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       $("ringSmall").textContent = n ? "nästa " + t(n.start_at) : "inget planerat";
       $("bar").style.strokeDashoffset = String(C);
       $("word").textContent = S ? "Avstängd" : "Ansluter…";
-      $("detail").textContent = !S ? "Hämtar status från uttaget." : n ? "Nästa Värme " + dayOf(new Date(n.start_at).getTime()).toLowerCase() + " " + t(n.start_at) + "–" + t(n.end_at) + "." : "Ingen Värme inlagd de närmaste 7 dagarna.";
+      $("detail").textContent = !S ? "Hämtar status från uttaget." : n ? "Nästa avresa " + dayOf(new Date(n.end_at).getTime()).toLowerCase() + " " + t(n.end_at) + ". Värmen startar " + t(n.start_at) + "." : "Ingen avresa inlagd de närmaste 7 dagarna.";
     }
     $("dial").classList.toggle("hot", confirmed);
     const m = [];
@@ -584,7 +582,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     ds.forEach((dy) => {
       const span = dy.end - dy.start;
       const y = (ms) => ((ms - dy.start) / span) * 24 * H;
-      html += "<div class='col" + (dy.i === 0 ? " today" : "") + "' data-day='" + dy.i + "' tabindex='0' role='button' aria-label='Lägg till Värme " + esc(dayLabel(dy)) + "' style='height:" + 24 * H + "px'>";
+      html += "<div class='col" + (dy.i === 0 ? " today" : "") + "' data-day='" + dy.i + "' tabindex='0' role='button' aria-label='Lägg till avresa " + esc(dayLabel(dy)) + "' style='height:" + 24 * H + "px'>";
       if (dy.i === 0) {
         html += "<div class='past' style='height:" + y(now) + "px'></div><div class='nowline' style='top:" + y(now) + "px'></div>";
       }
@@ -612,8 +610,8 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       for (const it of items) {
         const e = it.e, w = 100 / it.n;
         const sel = selected && selected.type === e.type && selected.id === e.id ? " sel" : "";
-        html += "<div class='ev " + e.type + " " + e.status + sel + "' data-type='" + e.type + "' data-id='" + esc(e.id) + "' tabindex='0' role='button' aria-label='" + esc(e.title + " " + t(e.start) + " till " + t(e.end)) + "' style='top:" + it.top + "px;height:" + it.hgt + "px;left:calc(" + w * it.c + "% + 2px);width:calc(" + w + "% - 4px)'>" +
-          t(e.start) + (it.hgt > 30 ? "<br>" + t(e.end) : "") + "</div>";
+        html += "<div class='ev " + e.type + " " + e.status + sel + "' data-type='" + e.type + "' data-id='" + esc(e.id) + "' tabindex='0' role='button' aria-label='" + esc("Avresa " + t(e.end) + ", värme från " + t(e.start)) + "' style='top:" + it.top + "px;height:" + it.hgt + "px;left:calc(" + w * it.c + "% + 2px);width:calc(" + w + "% - 4px)'>" +
+          "→" + t(e.end) + "</div>";
       }
       html += "</div>";
     });
@@ -644,8 +642,8 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     closeAdd();
     const p = $("detailPanel");
     p.className = "panel " + type;
-    $("dTitle").textContent = e.title;
-    $("dText").textContent = dayOf(e.start) + " " + t(e.start) + "–" + t(e.end) + " (" + dur(e.end - e.start) + "). " + statusText(e);
+    $("dTitle").textContent = type === "v" ? "Avresa " + t(e.end) : e.title;
+    $("dText").textContent = dayOf(e.end) + ". Värmen går " + t(e.start) + "–" + t(e.end) + " (" + dur(e.end - e.start) + "). " + statusText(e);
     const acts = $("dActions");
     acts.innerHTML = "";
     const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.addEventListener("click", fn); acts.appendChild(b); return b; };
@@ -666,49 +664,44 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   }
   function closeDetail() { selected = null; $("detailPanel").hidden = true; if (S) renderCalendar(); }
 
-  /* Lägg till Värme */
+  /* Lägg till avresa: värmen startar LEAD_MIN minuter före */
   function openAdd(dayIdx, minutes) {
     closeDetail();
     const ds = days();
     $("fDay").innerHTML = ds.map((dy) => "<option value='" + dy.i + "'>" + esc(dayLabel(dy) + (dy.i < 2 ? " " + dy.d + "/" + dy.mo : "")) + "</option>").join("");
-    let start = minutes;
-    if (start === undefined) {
+    let dep = minutes; // avresetid i minuter efter midnatt
+    if (dep === undefined) {
       const p = parts(Date.now());
-      start = Math.ceil((p.h * 60 + p.mi + 5) / 15) * 15;
+      dep = Math.ceil((p.h * 60 + p.mi + LEAD_MIN) / 5) * 5; // tidigaste avresan med full värmetid
       dayIdx = 0;
-      if (start >= 24 * 60) { start = 7 * 60; dayIdx = 1; }
+      if (dep >= 24 * 60) { dep -= 24 * 60; dayIdx = 1; }
     }
     $("fDay").value = String(dayIdx);
-    const end = Math.min(start + 30, 24 * 60 - 5);
-    $("fStart").value = hhmm(start);
-    $("fEnd").value = hhmm(end);
+    $("fDep").value = hhmm(dep);
     $("addForm").hidden = false;
     validate();
-    $("fStart").focus();
+    $("fDep").focus();
   }
   function closeAdd() { $("addForm").hidden = true; }
   const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 
   function formTimes() {
     const dy = days()[+$("fDay").value];
-    const [sh, sm] = ($("fStart").value || "").split(":").map(Number);
-    const [eh, em] = ($("fEnd").value || "").split(":").map(Number);
-    if (!dy || isNaN(sh) || isNaN(eh)) return null;
-    const start = wall(dy.y, dy.mo, dy.d, sh, sm);
-    let end = wall(dy.y, dy.mo, dy.d, eh, em);
-    if (end <= start) end = wall(dy.y, dy.mo, dy.d + 1, eh, em); // över midnatt
-    return { start, end };
+    const [h, m] = ($("fDep").value || "").split(":").map(Number);
+    if (!dy || isNaN(h) || isNaN(m)) return null;
+    const end = wall(dy.y, dy.mo, dy.d, h, m); // avresan
+    return { start: end - LEAD_MIN * MIN, end };
   }
   function validate() {
     const f = formTimes();
     const hint = $("fHint");
     let msg = "", bad = false;
-    const max = (S && S.settings.max_minutes) || 120;
-    if (!f) { msg = "Välj start och slut."; bad = true; }
-    else if (f.end <= Date.now()) { msg = "Tiden har redan passerat."; bad = true; }
-    else if (f.end - f.start > max * MIN) { msg = "Högst " + max / 60 + " timmar. Nu: " + dur(f.end - f.start) + "."; bad = true; }
-    else if (S && (S.week.bookings || []).some((b) => new Date(b.start_at) < f.end && new Date(b.end_at) > f.start)) { msg = "Krockar med en annan Värme."; bad = true; }
-    else msg = "Värmen går i " + dur(f.end - f.start) + (f.start <= Date.now() ? " och startar direkt." : ".");
+    const now = Date.now();
+    if (!f) { msg = "Välj när du ska åka."; bad = true; }
+    else if (f.end <= now) { msg = "Tiden har redan passerat."; bad = true; }
+    else if (S && (S.week.bookings || []).some((b) => new Date(b.start_at) < f.end && new Date(b.end_at) > f.start)) { msg = "Krockar med en annan avresa."; bad = true; }
+    else if (f.start <= now) msg = "Mindre än " + LEAD_MIN + " min kvar: värmen startar direkt och går i " + dur(f.end - now) + ".";
+    else msg = "Värmen startar " + t(f.start) + ", " + LEAD_MIN + " min före avresan.";
     hint.textContent = msg;
     hint.className = "hint" + (bad ? " bad" : "");
     $("fSave").disabled = bad || busy || !session;
@@ -747,7 +740,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   $("stopBtn").addEventListener("click", () => act("stop"));
   $("addBtn").addEventListener("click", () => openAdd());
   $("fCancel").addEventListener("click", closeAdd);
-  ["fDay", "fStart", "fEnd"].forEach((id) => $(id).addEventListener("input", validate));
+  ["fDay", "fDep"].forEach((id) => $(id).addEventListener("input", validate));
   $("addForm").addEventListener("submit", (e) => {
     e.preventDefault();
     if (!validate()) return;

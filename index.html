@@ -311,11 +311,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     </div>
   </section>
 
-  <section>
-    <h2>Kommande</h2>
-    <div class="list" id="upcoming"><div class="empty">Hämtar…</div></div>
-  </section>
-
   <details id="settingsBox">
     <summary>Inställningar</summary>
     <form class="settings" id="settingsForm">
@@ -720,24 +715,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     return !bad;
   }
 
-  /* Listor */
-  function pillFor(e) {
-    if (e.status === "active") return "<span class='pill " + (e.type === "m" ? "man" : "heat") + "'>Pågår</span>";
-    if (e.status === "done") return "<span class='pill ok'>Klar</span>";
-    if (e.status === "stopped") return "<span class='pill'>Stoppad</span>";
-    if (e.status === "no_load") return "<span class='pill bad'>Ingen värmare</span>";
-    return "<span class='pill heat'>Planerad</span>";
-  }
-  function renderLists() {
-    const now = Date.now();
-    const up = events().filter((e) => e.end > now && (e.status === "planned" || e.status === "active")).sort((a, b) => a.start - b.start);
-    $("upcoming").innerHTML = up.length ? up.map((e) =>
-      "<button type='button' class='row' data-type='" + e.type + "' data-id='" + esc(e.id) + "'><span class='when'>" + esc(dayOf(e.start).split(" ")[0]) + "<b>" + t(e.start) + "</b></span>" +
-      "<span class='what'><div><span class='dot' style='background: var(--" + (e.type === "m" ? "manual" : "heat") + ")'></span>" + esc(e.title) + "</div><small class='mono'>" + t(e.start) + "–" + t(e.end) + " · " + dur(e.end - e.start) + "</small></span>" +
-      pillFor(e) + "</button>").join("") : "<div class='empty'>Inget inlagt. Tryck i kalendern eller på + Lägg till Värme.</div>";
-
-  }
-
   let formFilled = false;
   function renderSettings() {
     const s = S.settings;
@@ -755,7 +732,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     if (!S) return;
     renderDial();
     renderCalendar();
-    renderLists();
     renderSettings();
     if (selected && !$("detailPanel").hidden) {
       const e = events().find((x) => x.type === selected.type && x.id === selected.id);
@@ -796,7 +772,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     const col = e.target.closest(".col");
     if (col) { e.preventDefault(); openAdd(+col.dataset.day, 7 * 60); }
   });
-  $("upcoming").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) showDetail(r.dataset.type, r.dataset.id); });
 
   $("settingsForm").addEventListener("submit", (e) => {
     e.preventDefault();

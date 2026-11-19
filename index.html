@@ -123,6 +123,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .small-btn { padding: 8px 12px; font-size: 0.9rem; border-radius: 10px; }
 .actions .stop { flex: 0 0 auto; min-width: 110px; }
 
+/* Snabbval: fasta avresetider som läggs in i kalendern med ett tryck. */
+.presets { display: flex; justify-content: space-between; gap: 8px; }
+.preset {
+  width: min(68px, 22%); aspect-ratio: 1; padding: 0; border-radius: 50%; border-color: var(--heat); background: var(--heat-soft); color: var(--heat);
+  font-family: var(--mono); font-size: 0.95rem; font-weight: 500; font-variant-numeric: tabular-nums;
+}
 .confirm { border: 1px solid var(--manual); background: var(--manual-soft); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
 .confirm p { margin: 0; }
 .confirm .actions button { flex: 1; }
@@ -269,6 +275,12 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     <div class="actions" id="mainActions">
       <button class="primary manual-btn" id="startBtn" type="button" disabled>Starta 60 min</button>
       <button class="stop" id="stopBtn" type="button" hidden>Stoppa</button>
+    </div>
+    <div class="presets" id="presets" role="group" aria-label="Snabbval för avresa">
+      <button type="button" class="preset" data-time="06:20" aria-label="Lägg in avresa 06:20">06:20</button>
+      <button type="button" class="preset" data-time="09:10" aria-label="Lägg in avresa 09:10">09:10</button>
+      <button type="button" class="preset" data-time="13:05" aria-label="Lägg in avresa 13:05">13:05</button>
+      <button type="button" class="preset" data-time="20:00" aria-label="Lägg in avresa 20:00">20:00</button>
     </div>
   </div>
 
@@ -745,6 +757,20 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   $("confirmNo").addEventListener("click", closeConfirm);
   $("stopBtn").addEventListener("click", () => act("stop"));
   $("addBtn").addEventListener("click", () => openAdd());
+  // Snabbval: nästa gång klockan slår den tiden (idag om den inte passerat, annars imorgon).
+  $("presets").addEventListener("click", (e) => {
+    const b = e.target.closest(".preset");
+    if (!b) return;
+    const [h, m] = b.dataset.time.split(":").map(Number);
+    const p = parts(Date.now());
+    let end = wall(p.y, p.mo, p.d, h, m);
+    const tomorrow = end <= Date.now();
+    if (tomorrow) end = wall(p.y, p.mo, p.d + 1, h, m);
+    const start = end - LEAD_MIN * MIN;
+    act("add_booking", { start: new Date(start).toISOString(), end: new Date(end).toISOString() }).then((r) => {
+      if (r && r.ok) toast("Avresa " + b.dataset.time + (tomorrow ? " imorgon" : " idag") + " tillagd. " + (start <= Date.now() ? "Värmen startar direkt." : "Värmen startar " + t(start) + "."), "ok");
+    });
+  });
   $("fCancel").addEventListener("click", closeAdd);
   ["fDay", "fDep"].forEach((id) => $(id).addEventListener("input", validate));
   $("addForm").addEventListener("submit", (e) => {

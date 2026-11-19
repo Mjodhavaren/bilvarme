@@ -305,7 +305,6 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       </div>
       <div class="legend">
         <span><i style="background: var(--heat)"></i>Värme</span>
-        <span><i style="background: var(--manual)"></i>Manuell start</span>
         <span><i style="background: var(--heat-soft); border: 1px solid var(--heat)"></i>Klar</span>
         <span>Tryck i kalendern för att lägga till</span>
       </div>
@@ -572,10 +571,7 @@ header .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     for (const b of S.week.bookings || []) {
       out.push({ type: "v", id: b.uid, start: new Date(b.start_at).getTime(), end: new Date(b.end_at).getTime(), status: b.session_status || "planned", reason: b.end_reason, title: "Värme" });
     }
-    for (const m of S.week.manual || []) {
-      const end = m.status === "active" && S.active ? new Date(S.active.endAt).getTime() : new Date(m.end_at).getTime();
-      out.push({ type: "m", id: String(m.id), start: new Date(m.started_at).getTime(), end, status: m.status, reason: m.end_reason, title: "Manuell start" });
-    }
+    // Manuella starter visas inte i kalendern, bara i urtavlan medan de pågår.
     return out;
   }
 
